@@ -1,6 +1,6 @@
-"""Drag this file into a Maya 2025+ viewport to install Playblast Frames.
+"""Drag this file into a Maya 2025+ viewport to install ReconBlaster.
 
-Copies the playblast_frames package into the user scripts directory and adds a
+Copies the reconblaster package into the user scripts directory and adds a
 button to the current shelf.
 """
 
@@ -13,9 +13,9 @@ import maya.cmds as cmds
 import maya.mel as mel
 
 
-PACKAGE = "playblast_frames"
-SHELF_LABEL = "PBFrames"
-SHELF_COMMAND = "import playblast_frames\nplayblast_frames.show()"
+PACKAGE = "reconblaster"
+SHELF_LABEL = "ReconBlaster"
+SHELF_COMMAND = "import reconblaster\nreconblaster.show()"
 
 
 def _installer_dir():
@@ -38,7 +38,7 @@ def _add_shelf_button():
         label=SHELF_LABEL,
         annotation="Single-frame playblasts from multiple cameras",
         image="pythonFamily.png",
-        imageOverlayLabel="PBF",
+        imageOverlayLabel="RB",
         sourceType="python",
         command=SHELF_COMMAND,
     )
@@ -70,10 +70,10 @@ def onMayaDroppedPythonFile(*args):
 
     _add_shelf_button()
 
-    import playblast_frames
+    import reconblaster
 
     print(
-        "Playblast Frames %s installed to: %s"
-        % (playblast_frames.__version__, destination)
+        "ReconBlaster %s installed to: %s"
+        % (reconblaster.__version__, destination)
     )
-    playblast_frames.show()
+    reconblaster.show()

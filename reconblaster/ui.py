@@ -13,11 +13,21 @@ import maya.OpenMayaUI as omui
 from . import __version__, capture
 
 
-OUTPUT_OPTION_VAR = "playblastFramesOutputDir"
-WIRE_COLOR_OPTION_VAR = "playblastFramesWireColor"
-WIRE_COLOR_ON_OPTION_VAR = "playblastFramesWireColorOn"
-PREFIX_OPTION_VAR = "playblastFramesPrefix"
-PASSES_OPTION_VAR = "playblastFramesPasses"
+OUTPUT_OPTION_VAR = "reconBlasterOutputDir"
+WIRE_COLOR_OPTION_VAR = "reconBlasterWireColor"
+WIRE_COLOR_ON_OPTION_VAR = "reconBlasterWireColorOn"
+PREFIX_OPTION_VAR = "reconBlasterPrefix"
+PASSES_OPTION_VAR = "reconBlasterPasses"
+
+# The tool was called Playblast Frames before 3.0.0. Its settings are copied
+# across the first time ReconBlaster runs, so nobody loses them.
+LEGACY_OPTION_VARS = {
+    OUTPUT_OPTION_VAR: "playblastFramesOutputDir",
+    WIRE_COLOR_OPTION_VAR: "playblastFramesWireColor",
+    WIRE_COLOR_ON_OPTION_VAR: "playblastFramesWireColorOn",
+    PREFIX_OPTION_VAR: "playblastFramesPrefix",
+    PASSES_OPTION_VAR: "playblastFramesPasses",
+}
 
 # Checkbox label for each capture.PASSES suffix, in the order they are shown.
 PASS_LABELS = (
@@ -33,8 +43,11 @@ DEFAULT_WIRE_COLOR = "#00ff00"
 # The queue lives in a JSON file rather than an optionVar so the chosen
 # cameras, their frames and the character survive a prefs reset and travel
 # with the shot.
-QUEUE_FILE_SUFFIX = "_playblast_cams.json"
-UNTITLED_QUEUE_FILE = "playblast_frames_untitled_cams.json"
+QUEUE_FILE_SUFFIX = "_reconblaster.json"
+UNTITLED_QUEUE_FILE = "reconblaster_untitled.json"
+# Playblast Frames' names for the same files, read when no new one exists yet.
+LEGACY_QUEUE_FILE_SUFFIX = "_playblast_cams.json"
+LEGACY_UNTITLED_QUEUE_FILE = "playblast_frames_untitled_cams.json"
 
 
 def maya_main_window():
@@ -70,7 +83,7 @@ def fuzzy_match(pattern, text):
     return (1, position - start)
 
 
-def queue_file_path():
+def queue_file_path(suffix=QUEUE_FILE_SUFFIX, untitled=UNTITLED_QUEUE_FILE):
     """Where this scene's camera queue is stored.
 
     Beside the scene file, so the queue is per shot and comes back with it. An
@@ -79,8 +92,20 @@ def queue_file_path():
     """
     scene = cmds.file(query=True, sceneName=True)
     if scene:
-        return os.path.splitext(scene)[0] + QUEUE_FILE_SUFFIX
-    return os.path.join(cmds.internalVar(userPrefDir=True), UNTITLED_QUEUE_FILE)
+        return os.path.splitext(scene)[0] + suffix
+    return os.path.join(cmds.internalVar(userPrefDir=True), untitled)
+
+
+def _migrate_option_vars():
+    """Copy Playblast Frames settings to ReconBlaster's names, once."""
+    for name, legacy in LEGACY_OPTION_VARS.items():
+        if cmds.optionVar(exists=name) or not cmds.optionVar(exists=legacy):
+            continue
+        value = cmds.optionVar(query=legacy)
+        if isinstance(value, int):
+            cmds.optionVar(intValue=(name, value))
+        else:
+            cmds.optionVar(stringValue=(name, value))
 
 
 def read_queue_file():
@@ -91,12 +116,16 @@ def read_queue_file():
     """
     path = queue_file_path()
     if not os.path.isfile(path):
+        # Until the first save, a shot set up with Playblast Frames only has
+        # the old file.
+        path = queue_file_path(LEGACY_QUEUE_FILE_SUFFIX, LEGACY_UNTITLED_QUEUE_FILE)
+    if not os.path.isfile(path):
         return [], []
     try:
         with open(path) as handle:
             data = json.load(handle)
     except (OSError, ValueError) as error:
-        print("Playblast Frames: could not read %s (%s)" % (path, error))
+        print("ReconBlaster: could not read %s (%s)" % (path, error))
         return [], []
     if isinstance(data, list):
         return [], [(str(camera), None) for camera in data]
@@ -118,7 +147,7 @@ def write_queue_file(character, shots):
             json.dump(data, handle, indent=2)
     except OSError as error:
         # A read-only shot folder should not break the window on every edit.
-        print("Playblast Frames: could not write %s (%s)" % (path, error))
+        print("ReconBlaster: could not write %s (%s)" % (path, error))
 
 
 def _frame_spin_box():
@@ -131,11 +160,11 @@ def _current_frame():
     return int(round(cmds.currentTime(query=True)))
 
 
-class PlayblastFramesWindow(QtWidgets.QDialog):
+class ReconBlasterWindow(QtWidgets.QDialog):
 
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.setWindowTitle("Playblast Frames %s" % __version__)
+        self.setWindowTitle("ReconBlaster %s" % __version__)
         self.setWindowFlags(QtCore.Qt.Window)
         self.setMinimumSize(660, 440)
 
@@ -239,7 +268,7 @@ class PlayblastFramesWindow(QtWidgets.QDialog):
         self.progress.setVisible(False)
         self.process_button = QtWidgets.QPushButton("Process")
         # Also in the window title, but that is easy to miss or cut off.
-        self.version_label = QtWidgets.QLabel("Playblast Frames %s" % __version__)
+        self.version_label = QtWidgets.QLabel("ReconBlaster %s" % __version__)
         self.version_label.setAlignment(QtCore.Qt.AlignRight)
         self.version_label.setStyleSheet("color: #808080;")
 
@@ -449,7 +478,7 @@ class PlayblastFramesWindow(QtWidgets.QDialog):
         if not capture.character_shapes(selected):
             QtWidgets.QMessageBox.warning(
                 self,
-                "Playblast Frames",
+                "ReconBlaster",
                 "Select the character's geometry (a group or meshes) first.",
             )
             return
@@ -472,7 +501,7 @@ class PlayblastFramesWindow(QtWidgets.QDialog):
         if not os.path.isfile(capture.LIGHT_RIG_FILE):
             QtWidgets.QMessageBox.warning(
                 self,
-                "Playblast Frames",
+                "ReconBlaster",
                 "Lighting rig scene not found:\n%s" % capture.LIGHT_RIG_FILE,
             )
             return
@@ -514,6 +543,7 @@ class PlayblastFramesWindow(QtWidgets.QDialog):
         Nothing here writes back: opening the tool before a reference has
         loaded would otherwise save an empty queue over the saved one.
         """
+        _migrate_option_vars()
         self._suspend_save = True
         try:
             self._restore_saved()
@@ -613,21 +643,21 @@ class PlayblastFramesWindow(QtWidgets.QDialog):
         shots = [shot for shot in self._shots() if cmds.objExists(shot[0])]
         if not shots:
             QtWidgets.QMessageBox.warning(
-                self, "Playblast Frames", "Queue at least one camera first."
+                self, "ReconBlaster", "Queue at least one camera first."
             )
             return
 
         character = [node for node in self._character if cmds.objExists(node)]
         if not character:
             QtWidgets.QMessageBox.warning(
-                self, "Playblast Frames", "Set the character geometry first."
+                self, "ReconBlaster", "Set the character geometry first."
             )
             return
 
         output_dir = self.output_dir.text().strip()
         if not output_dir:
             QtWidgets.QMessageBox.warning(
-                self, "Playblast Frames", "Choose an output folder first."
+                self, "ReconBlaster", "Choose an output folder first."
             )
             return
 
@@ -650,7 +680,7 @@ class PlayblastFramesWindow(QtWidgets.QDialog):
             traceback.print_exc()
             QtWidgets.QMessageBox.critical(
                 self,
-                "Playblast Frames",
+                "ReconBlaster",
                 "Capture failed - see the Script Editor for details.",
             )
             return
@@ -660,7 +690,7 @@ class PlayblastFramesWindow(QtWidgets.QDialog):
 
         QtWidgets.QMessageBox.information(
             self,
-            "Playblast Frames",
+            "ReconBlaster",
             "Wrote %d images to:\n%s" % (len(written), output_dir),
         )
 
@@ -677,6 +707,6 @@ def show():
             _window.deleteLater()
         except RuntimeError:
             pass
-    _window = PlayblastFramesWindow(parent=maya_main_window())
+    _window = ReconBlasterWindow(parent=maya_main_window())
     _window.show()
     return _window

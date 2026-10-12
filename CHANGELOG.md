@@ -1,8 +1,21 @@
 # Changelog
 
 Versions follow [semantic versioning](https://semver.org): `MAJOR.MINOR.PATCH`.
-The version lives in `playblast_frames/__init__.py` as `__version__` and is
+The version lives in `reconblaster/__init__.py` as `__version__` and is
 shown in the window title.
+
+## 3.0.0
+
+- Renamed from Playblast Frames to **ReconBlaster**. The package is now
+  `reconblaster` (`import reconblaster; reconblaster.show()`), the shelf
+  button is **ReconBlaster** and the zip is `reconblaster_3.0.0.zip`.
+- Queue files are saved as `<scene>_reconblaster.json`. A shot that only has
+  an old `<scene>_playblast_cams.json` still loads from it, and the next
+  change is saved under the new name.
+- Settings are stored under `reconBlaster*` optionVars. The old
+  `playblastFrames*` ones are copied across the first time the tool opens.
+- The lighting rig is imported under the `rbLightRig` namespace instead of
+  `pbfLightRig`, and lives at `reconblaster/lighting_rig.ma`.
 
 ## 2.2.0
 

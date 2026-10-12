@@ -129,7 +129,7 @@ def scene_lights():
 # Lighting rig scene shipped inside the package, imported under its own
 # namespace so it is easy to find, adjust and delete.
 LIGHT_RIG_FILE = os.path.join(os.path.dirname(__file__), "lighting_rig.ma")
-LIGHT_RIG_NAMESPACE = "pbfLightRig"
+LIGHT_RIG_NAMESPACE = "rbLightRig"
 
 
 def light_rig_nodes():
@@ -249,7 +249,7 @@ def _panel_size(width, height):
 def _capture_panel(width, height):
     """Temporary model panel in its own window, so the user's viewport is untouched."""
     window = cmds.window(
-        title="Playblast Frames capture", widthHeight=_panel_size(width, height)
+        title="ReconBlaster capture", widthHeight=_panel_size(width, height)
     )
     try:
         cmds.paneLayout()

@@ -1,14 +1,14 @@
-# Playblast Frames 2.2.0
+# ReconBlaster 3.0.0
 
 Grab quick 4K viewport stills of your character from lots of shot cameras at
 once, each camera on its own frame. Needs Maya 2025 or newer.
 
 ## Install
 
-1. Unzip `playblast_frames_2.2.0.zip`.
+1. Unzip `reconblaster_3.0.0.zip`.
 2. Drag `install.py` into a Maya viewport.
 
-That's it. You get a **PBFrames** button on your current shelf, and the tool
+That's it. You get a **ReconBlaster** button on your current shelf, and the tool
 opens.
 
 ## Quickstart
@@ -54,3 +54,6 @@ Each image has the rig, camera and pass written along the bottom.
   keep the scene's own colours.
 - The filename prefix is optional. `hero` turns `cam080_wire.png` into
   `hero_cam080_wire.png`.
+- ReconBlaster used to be called Playblast Frames. Shots and settings from it
+  still load. The old **PBFrames** shelf button keeps opening the old version,
+  so you can delete it.
