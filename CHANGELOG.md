@@ -4,6 +4,21 @@ Versions follow [semantic versioning](https://semver.org): `MAJOR.MINOR.PATCH`.
 The version lives in `playblast_frames/__init__.py` as `__version__` and is
 shown in the window title.
 
+## 2.2.0
+
+- New **Checker** pass (`checker`): the character in a lambert with a checker
+  texture, to show its UVs.
+- The Shaded pass is a plain grey lambert again instead of a blinn.
+- Every pass is lit by all the scene's lights, with shadows and ambient
+  occlusion on. Every light is made to cast shadows for the capture, and put
+  back afterwards. Scenes with no lights fall back to Maya's default light.
+- Wireframe lines are drawn smoothed, and anti-aliasing stays at 16x.
+- **Select** button next to the character geometry selects it in Maya.
+- **Add lighting rig** imports the lighting rig scene
+  (`playblast_frames/lighting_rig.ma`) under the `pbfLightRig` namespace and
+  selects it so you can adjust it. If it is already in the scene, it is just
+  selected.
+
 ## 2.1.0
 
 - New **Plate** pass (`plate`): the camera's image plane on its own, with the

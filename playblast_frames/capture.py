@@ -24,8 +24,8 @@ PASSES = (
         },
         None,
     ),
-    # Plain grey blinn with its specular turned off, so the form reads
-    # without the character's own shading.
+    # Plain grey lambert, so the form reads without the character's own
+    # shading.
     (
         "shaded",
         "Shaded",
@@ -34,7 +34,18 @@ PASSES = (
             "useDefaultMaterial": False,
             "displayTextures": False,
         },
-        "blinn",
+        "lambert",
+    ),
+    # A lambert with a checker texture, to show the character's UV layout.
+    (
+        "checker",
+        "Checker",
+        {
+            "wireframeOnShaded": False,
+            "useDefaultMaterial": False,
+            "displayTextures": True,
+        },
+        "checker",
     ),
     # A useBackground shader on the character draws its surface as the plate
     # behind it, but it still hides back-facing wires.
@@ -107,6 +118,33 @@ def image_planes(camera):
     return planes
 
 
+def scene_lights():
+    """Long transform paths of every light in the scene."""
+    shapes = cmds.ls(lights=True, long=True) or []
+    if not shapes:
+        return []
+    return sorted(set(cmds.listRelatives(shapes, parent=True, fullPath=True) or []))
+
+
+# Lighting rig scene shipped inside the package, imported under its own
+# namespace so it is easy to find, adjust and delete.
+LIGHT_RIG_FILE = os.path.join(os.path.dirname(__file__), "lighting_rig.ma")
+LIGHT_RIG_NAMESPACE = "pbfLightRig"
+
+
+def light_rig_nodes():
+    """Top-level nodes of the lighting rig already in the scene, if any."""
+    return cmds.ls(LIGHT_RIG_NAMESPACE + ":*", assemblies=True, long=True) or []
+
+
+def import_light_rig():
+    """Import LIGHT_RIG_FILE and return its top-level nodes."""
+    cmds.file(
+        LIGHT_RIG_FILE, i=True, namespace=LIGHT_RIG_NAMESPACE, ignoreVersion=True
+    )
+    return light_rig_nodes()
+
+
 CAPTURE_WIDTH = 3840
 
 
@@ -142,21 +180,24 @@ def _file_stem(camera, prefix=""):
     return prefix + "_" + stem if prefix else stem
 
 
-# Viewport 2.0 anti-aliasing. lineAAEnable is the one that smooths wireframe
-# lines; multisampling alone leaves them stair-stepped.
-ANTI_ALIASING = {
+# Viewport 2.0 settings for every pass: anti-aliasing at its maximum and
+# ambient occlusion on. lineAAEnable is the one that smooths wireframe lines;
+# multisampling alone leaves them stair-stepped.
+VIEWPORT_GLOBALS = {
     "lineAAEnable": True,
     "multiSampleEnable": True,
     "multiSampleCount": 16,
+    "ssaoEnable": True,
+    "ssaoSamples": 32,
 }
 
 
 @contextlib.contextmanager
-def _anti_aliasing():
-    """Force Viewport 2.0 anti-aliasing on, restoring the scene's settings after."""
+def _viewport_globals():
+    """Force VIEWPORT_GLOBALS on, restoring the scene's settings after."""
     previous = {}
     try:
-        for attribute, value in ANTI_ALIASING.items():
+        for attribute, value in VIEWPORT_GLOBALS.items():
             plug = "hardwareRenderingGlobals." + attribute
             previous[plug] = cmds.getAttr(plug)
             cmds.setAttr(plug, value)
@@ -227,8 +268,11 @@ def _capture_panel(width, height):
             subdivSurfaces=True,
             imagePlane=True,
             displayAppearance="smoothShaded",
-            displayLights="default",
-            shadows=False,
+            smoothWireframe=True,
+            # Light with the scene's lights when it has any; Maya's default
+            # light is all there is otherwise, and it casts no shadows.
+            displayLights="all" if scene_lights() else "default",
+            shadows=True,
             grid=False,
             headsUpDisplay=False,
             manipulators=False,
@@ -240,14 +284,43 @@ def _capture_panel(width, height):
         cmds.deleteUI(window, window=True)
 
 
+# Checker tiles per 0-1 UV square.
+CHECKER_REPEAT = 8
+
+
 def _assign_shader(shapes, shader_type):
-    """Assign a new shader of shader_type to shapes. Call inside _undone_after."""
-    shader = cmds.shadingNode(shader_type, asShader=True)
-    if shader_type == "blinn":
-        cmds.setAttr(shader + ".specularColor", 0, 0, 0, type="double3")
+    """Assign a new shader of shader_type to shapes. Call inside _undone_after.
+
+    A shader_type of "checker" is a lambert with a checker texture in its
+    colour.
+    """
+    if shader_type == "checker":
+        shader = cmds.shadingNode("lambert", asShader=True)
+        checker = cmds.shadingNode("checker", asTexture=True)
+        place = cmds.shadingNode("place2dTexture", asUtility=True)
+        cmds.connectAttr(place + ".outUV", checker + ".uvCoord")
+        cmds.connectAttr(place + ".outUvFilterSize", checker + ".uvFilterSize")
+        cmds.setAttr(place + ".repeatU", CHECKER_REPEAT)
+        cmds.setAttr(place + ".repeatV", CHECKER_REPEAT)
+        cmds.connectAttr(checker + ".outColor", shader + ".color")
+    else:
+        shader = cmds.shadingNode(shader_type, asShader=True)
     group = cmds.sets(renderable=True, noSurfaceShader=True, empty=True)
     cmds.connectAttr(shader + ".outColor", group + ".surfaceShader")
     cmds.sets(shapes, edit=True, forceElement=group)
+
+
+def _turn_on_shadows():
+    """Make every light in the scene cast shadows. Call inside _undone_after.
+
+    Viewport 2.0 only draws shadows from lights with depth map shadows on.
+    Ambient lights have no such setting, and locked or connected ones are
+    left as they are.
+    """
+    for shape in cmds.ls(lights=True, long=True) or []:
+        plug = shape + ".useDepthMapShadows"
+        if cmds.objExists(plug) and cmds.getAttr(plug, settable=True):
+            cmds.setAttr(plug, True)
 
 
 def _isolate(panel, nodes):
@@ -291,11 +364,13 @@ def capture_batch(
     width, height = capture_resolution()
     written = []
     selection = cmds.ls(selection=True, long=True)
+    lights = scene_lights()
 
     try:
-        with _anti_aliasing(), _undone_after(
+        with _viewport_globals(), _undone_after(
             shapes, wireframe_color
         ), _capture_panel(width, height) as panel:
+            _turn_on_shadows()
             for suffix, label, settings, shader_type in PASSES:
                 if passes is not None and suffix not in passes:
                     continue
@@ -304,7 +379,9 @@ def capture_batch(
                 cmds.modelEditor(panel, edit=True, **settings)
                 for camera, frame in shots:
                     cmds.modelEditor(panel, edit=True, camera=camera)
-                    _isolate(panel, character + image_planes(camera))
+                    # Lights go in the isolated set too, so isolate select
+                    # cannot switch them off.
+                    _isolate(panel, character + image_planes(camera) + lights)
                     # playblast grabs the focused panel.
                     cmds.setFocus(panel)
                     path = os.path.join(

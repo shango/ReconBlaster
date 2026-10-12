@@ -25,6 +25,7 @@ PASS_LABELS = (
     ("wire", "Wireframe"),
     ("shaded", "Shaded"),
     ("material", "Material"),
+    ("checker", "Checker"),
 )
 
 DEFAULT_WIRE_COLOR = "#00ff00"
@@ -192,6 +193,16 @@ class PlayblastFramesWindow(QtWidgets.QDialog):
             "Select the character's geometry group, then Set from selection"
         )
         self.character_button = QtWidgets.QPushButton("Set from selection")
+        self.select_character_button = QtWidgets.QPushButton("Select")
+        self.select_character_button.setToolTip(
+            "Select the character geometry in Maya"
+        )
+
+        self.light_rig_button = QtWidgets.QPushButton("Add lighting rig")
+        self.light_rig_button.setToolTip(
+            "Import the playblast lighting rig into the scene and select it, "
+            "or select it if it is already there"
+        )
 
         self.pass_boxes = {}
         for suffix, label in PASS_LABELS:
@@ -259,6 +270,7 @@ class PlayblastFramesWindow(QtWidgets.QDialog):
         character_row.addWidget(QtWidgets.QLabel("Character geometry"))
         character_row.addWidget(self.character)
         character_row.addWidget(self.character_button)
+        character_row.addWidget(self.select_character_button)
 
         prefix_row = QtWidgets.QHBoxLayout()
         prefix_row.addWidget(QtWidgets.QLabel("Filename prefix"))
@@ -280,6 +292,7 @@ class PlayblastFramesWindow(QtWidgets.QDialog):
         wire_row.addWidget(self.wire_color_on)
         wire_row.addWidget(self.wire_color_button)
         wire_row.addStretch()
+        wire_row.addWidget(self.light_rig_button)
 
         layout.addLayout(lists)
         layout.addWidget(self.queue_file_label)
@@ -304,6 +317,8 @@ class PlayblastFramesWindow(QtWidgets.QDialog):
         self.clear_button.clicked.connect(self._clear_queue)
         self.current_frame_button.clicked.connect(self._set_to_current_frame)
         self.character_button.clicked.connect(self._set_character_from_selection)
+        self.select_character_button.clicked.connect(self._select_character)
+        self.light_rig_button.clicked.connect(self._add_light_rig)
         for box in self.pass_boxes.values():
             box.toggled.connect(self._on_pass_toggled)
         self.prefix.textChanged.connect(self._save)
@@ -446,6 +461,24 @@ class PlayblastFramesWindow(QtWidgets.QDialog):
         self.character.setText(", ".join(capture.short_name(node) for node in nodes))
         self.character.setToolTip("\n".join(nodes))
         self._update_summary()
+
+    def _select_character(self):
+        nodes = [node for node in self._character if cmds.objExists(node)]
+        if nodes:
+            cmds.select(nodes, replace=True)
+
+    def _add_light_rig(self):
+        """Import the lighting rig, or select the one already in the scene."""
+        if not os.path.isfile(capture.LIGHT_RIG_FILE):
+            QtWidgets.QMessageBox.warning(
+                self,
+                "Playblast Frames",
+                "Lighting rig scene not found:\n%s" % capture.LIGHT_RIG_FILE,
+            )
+            return
+        nodes = capture.light_rig_nodes() or capture.import_light_rig()
+        if nodes:
+            cmds.select(nodes, replace=True)
 
     def _update_summary(self, *args):
         count = self.queue.rowCount()
