@@ -1,11 +1,11 @@
-# ReconBlaster 3.0.1
+# ReconBlaster 3.0.2
 
 Grab quick 4K viewport stills of your character from lots of shot cameras at
 once, each camera on its own frame. Needs Maya 2025 or newer.
 
 ## Install
 
-1. Unzip `reconblaster_3.0.1.zip`.
+1. Unzip `reconblaster_3.0.2.zip`.
 2. Drag `install.py` into a Maya viewport.
 
 That's it. You get a **ReconBlaster** button on your current shelf, and the tool
@@ -22,7 +22,8 @@ opens.
 4. Hit **Add lighting rig** to bring in the playblast lights, and move them
    around to suit the shot.
 5. Tick the passes you want: **Plate**, **Wireframe**, **Shaded**,
-   **Material**, **Checker**.
+   **Material**, **Checker**. **View transform** turns the viewport's colour
+   view transform on or off for the Material pass.
 6. Pick an output folder and hit **Process**.
 
 ## What you get
@@ -49,7 +50,8 @@ Each image has the rig, camera and pass written along the bottom.
 - Your cameras, frames and character are saved in a small file next to your
   scene, so they come back when you reopen the shot.
 - The tool doesn't change your scene. Anything it tweaks for the capture gets
-  put back afterwards.
+  put back afterwards, including the current frame. The lighting rig is
+  removed once **Process** finishes, so add it again for the next run.
 - The wireframe colour swatch sets one colour for all the wires. Untick it to
   keep the scene's own colours.
 - The filename prefix is optional. `hero` turns `cam080_wire.png` into

@@ -145,6 +145,14 @@ def import_light_rig():
     return light_rig_nodes()
 
 
+def remove_light_rig():
+    """Delete the lighting rig and its namespace, if it is in the scene."""
+    if cmds.namespace(exists=LIGHT_RIG_NAMESPACE):
+        cmds.namespace(
+            removeNamespace=LIGHT_RIG_NAMESPACE, deleteNamespaceContent=True
+        )
+
+
 CAPTURE_WIDTH = 3840
 
 
@@ -230,6 +238,41 @@ def _undone_after(shapes, color):
         cmds.undo()
         if not undo_was_on:
             cmds.undoInfo(state=False)
+
+
+@contextlib.contextmanager
+def _playblast_view_transform(enabled):
+    """Turn the viewport's view transform on or off for playblasts.
+
+    enabled of None leaves the colour management prefs alone. Otherwise the
+    playblast output transform is switched on (following the view
+    transform) or off, and the user's prefs are put back after.
+    """
+    if enabled is None:
+        yield
+        return
+    target = {"outputTarget": "playblast"}
+    was_enabled = cmds.colorManagementPrefs(
+        query=True, outputTransformEnabled=True, **target
+    )
+    used_view = cmds.colorManagementPrefs(
+        query=True, outputUseViewTransform=True, **target
+    )
+    name = cmds.colorManagementPrefs(query=True, outputTransformName=True, **target)
+    try:
+        cmds.colorManagementPrefs(edit=True, outputTransformEnabled=enabled, **target)
+        if enabled:
+            cmds.colorManagementPrefs(edit=True, outputUseViewTransform=True, **target)
+        yield
+    finally:
+        # Setting a transform name is the only way out of use-view mode.
+        if used_view:
+            cmds.colorManagementPrefs(edit=True, outputUseViewTransform=True, **target)
+        else:
+            cmds.colorManagementPrefs(edit=True, outputTransformName=name, **target)
+        cmds.colorManagementPrefs(
+            edit=True, outputTransformEnabled=was_enabled, **target
+        )
 
 
 # A 4K window does not fit on a normal monitor, and playblast renders off
@@ -338,6 +381,7 @@ def capture_batch(
     wireframe_color=None,
     passes=None,
     on_progress=None,
+    view_transform=None,
 ):
     """Write the given passes for every camera, each at its own frame.
 
@@ -351,9 +395,14 @@ def capture_batch(
     wireframe_color is an (r, g, b) 0-1 tuple applied to the character for the
     duration of the batch, or None to leave its own wireframe colours alone.
     passes is a collection of PASSES suffixes to write, or None for all of
-    them; they always run in PASSES order. Returns the list of image paths
+    them; they always run in PASSES order. Afterwards the lighting rig is
+    deleted and the current frame put back. Returns the list of image paths
     written. on_progress, if given, is called with each path as it is
     finished.
+
+    view_transform turns the viewport's view transform on (True) or off
+    (False) for the Material pass, or None leaves the colour management
+    prefs as they are.
     """
     shapes = character_shapes(character)
     if not shapes:
@@ -364,6 +413,7 @@ def capture_batch(
     width, height = capture_resolution()
     written = []
     selection = cmds.ls(selection=True, long=True)
+    current_time = cmds.currentTime(query=True)
     lights = scene_lights()
 
     try:
@@ -377,40 +427,51 @@ def capture_batch(
                 if shader_type:
                     _assign_shader(shapes, shader_type)
                 cmds.modelEditor(panel, edit=True, **settings)
-                for camera, frame in shots:
-                    cmds.modelEditor(panel, edit=True, camera=camera)
-                    # Lights go in the isolated set too, so isolate select
-                    # cannot switch them off.
-                    _isolate(panel, character + image_planes(camera) + lights)
-                    # playblast grabs the focused panel.
-                    cmds.setFocus(panel)
-                    path = os.path.join(
-                        output_dir, "%s_%s.png" % (_file_stem(camera, prefix), suffix)
-                    )
-                    cmds.playblast(
-                        format="image",
-                        compression="png",
-                        completeFilename=path,
-                        frame=[frame],
-                        widthHeight=(width, height),
-                        percent=100,
-                        quality=100,
-                        forceOverwrite=True,
-                        showOrnaments=False,
-                        offScreen=True,
-                        clearCache=True,
-                        viewer=False,
-                    )
-                    burnin.burn(
-                        path,
-                        "%s  |  %s  |  %s"
-                        % (rig_name(camera), camera_label(camera), label),
-                    )
-                    written.append(path)
-                    if on_progress:
-                        on_progress(path)
+                # The view transform toggle only applies to the textured
+                # Material pass.
+                with _playblast_view_transform(
+                    view_transform if suffix == "material" else None
+                ):
+                    for camera, frame in shots:
+                        cmds.modelEditor(panel, edit=True, camera=camera)
+                        # Lights go in the isolated set too, so isolate select
+                        # cannot switch them off.
+                        _isolate(panel, character + image_planes(camera) + lights)
+                        # playblast grabs the focused panel.
+                        cmds.setFocus(panel)
+                        path = os.path.join(
+                            output_dir,
+                            "%s_%s.png" % (_file_stem(camera, prefix), suffix),
+                        )
+                        cmds.playblast(
+                            format="image",
+                            compression="png",
+                            completeFilename=path,
+                            frame=[frame],
+                            widthHeight=(width, height),
+                            percent=100,
+                            quality=100,
+                            forceOverwrite=True,
+                            showOrnaments=False,
+                            offScreen=True,
+                            clearCache=True,
+                            viewer=False,
+                        )
+                        burnin.burn(
+                            path,
+                            "%s  |  %s  |  %s"
+                            % (rig_name(camera), camera_label(camera), label),
+                        )
+                        written.append(path)
+                        if on_progress:
+                            on_progress(path)
     finally:
+        # Leave the scene as it was before the tool ran: no lighting rig, and
+        # the frame the user was on.
+        remove_light_rig()
+        cmds.currentTime(current_time)
         # _isolate works through the selection, so put the user's back.
+        selection = cmds.ls(selection, long=True)
         if selection:
             cmds.select(selection, replace=True)
         else:

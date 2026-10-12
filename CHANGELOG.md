@@ -4,6 +4,15 @@ Versions follow [semantic versioning](https://semver.org): `MAJOR.MINOR.PATCH`.
 The version lives in `reconblaster/__init__.py` as `__version__` and is
 shown in the window title.
 
+## 3.0.2
+
+- **View transform** checkbox next to the passes turns the viewport's colour
+  view transform on or off for the Material pass. The playblast colour
+  management prefs are put back after the pass.
+- After **Process** the scene is left as it was before the tool ran: the
+  lighting rig and its `rbLightRig` namespace are deleted, and the current
+  frame is put back. Add the rig again before the next run.
+
 ## 3.0.1
 
 - The lighting rig scene `reconblaster/lighting_rig.ma` now ships with the

@@ -18,6 +18,7 @@ WIRE_COLOR_OPTION_VAR = "reconBlasterWireColor"
 WIRE_COLOR_ON_OPTION_VAR = "reconBlasterWireColorOn"
 PREFIX_OPTION_VAR = "reconBlasterPrefix"
 PASSES_OPTION_VAR = "reconBlasterPasses"
+VIEW_TRANSFORM_OPTION_VAR = "reconBlasterViewTransform"
 
 # The tool was called Playblast Frames before 3.0.0. Its settings are copied
 # across the first time ReconBlaster runs, so nobody loses them.
@@ -239,6 +240,12 @@ class ReconBlasterWindow(QtWidgets.QDialog):
             box.setChecked(True)
             self.pass_boxes[suffix] = box
 
+        self.view_transform_on = QtWidgets.QCheckBox("View transform")
+        self.view_transform_on.setChecked(True)
+        self.view_transform_on.setToolTip(
+            "Apply the viewport's view transform to the Material pass"
+        )
+
         self.wire_color_on = QtWidgets.QCheckBox("Wireframe colour")
         self.wire_color_on.setChecked(True)
         self.wire_color_button = QtWidgets.QPushButton()
@@ -315,6 +322,7 @@ class ReconBlasterWindow(QtWidgets.QDialog):
         for box in self.pass_boxes.values():
             passes_row.addWidget(box)
         passes_row.addStretch()
+        passes_row.addWidget(self.view_transform_on)
 
         layout = QtWidgets.QVBoxLayout(self)
         wire_row = QtWidgets.QHBoxLayout()
@@ -354,6 +362,8 @@ class ReconBlasterWindow(QtWidgets.QDialog):
         self.output_dir.textChanged.connect(self._save)
         self.wire_color_on.toggled.connect(self.wire_color_button.setEnabled)
         self.wire_color_on.toggled.connect(self._save)
+        self.pass_boxes["material"].toggled.connect(self.view_transform_on.setEnabled)
+        self.view_transform_on.toggled.connect(self._save)
         self.wire_color_button.clicked.connect(self._pick_wire_color)
         self.browse_button.clicked.connect(self._browse)
         self.process_button.clicked.connect(self.process)
@@ -536,6 +546,12 @@ class ReconBlasterWindow(QtWidgets.QDialog):
         cmds.optionVar(
             intValue=(WIRE_COLOR_ON_OPTION_VAR, int(self.wire_color_on.isChecked()))
         )
+        cmds.optionVar(
+            intValue=(
+                VIEW_TRANSFORM_OPTION_VAR,
+                int(self.view_transform_on.isChecked()),
+            )
+        )
 
     def _restore(self):
         """Reload the last session, matching saved cameras by name to this scene.
@@ -597,8 +613,13 @@ class ReconBlasterWindow(QtWidgets.QDialog):
             self.wire_color_on.setChecked(
                 bool(cmds.optionVar(query=WIRE_COLOR_ON_OPTION_VAR))
             )
+        if cmds.optionVar(exists=VIEW_TRANSFORM_OPTION_VAR):
+            self.view_transform_on.setChecked(
+                bool(cmds.optionVar(query=VIEW_TRANSFORM_OPTION_VAR))
+            )
         self._update_wire_swatch()
         self.wire_color_button.setEnabled(self.wire_color_on.isChecked())
+        self.view_transform_on.setEnabled(self.pass_boxes["material"].isChecked())
 
     def _update_wire_swatch(self):
         self.wire_color_button.setStyleSheet(
@@ -675,6 +696,7 @@ class ReconBlasterWindow(QtWidgets.QDialog):
                 wireframe_color=self._wireframe_color(),
                 passes=passes,
                 on_progress=self._on_capture_progress,
+                view_transform=self.view_transform_on.isChecked(),
             )
         except Exception:
             traceback.print_exc()
