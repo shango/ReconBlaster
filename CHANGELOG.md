@@ -4,6 +4,12 @@ Versions follow [semantic versioning](https://semver.org): `MAJOR.MINOR.PATCH`.
 The version lives in `reconblaster/__init__.py` as `__version__` and is
 shown in the window title.
 
+## 3.0.1
+
+- The lighting rig scene `reconblaster/lighting_rig.ma` now ships with the
+  tool, so **Add lighting rig** imports the `lights` group (ambient, key,
+  fill/bounce and point lights) instead of reporting the scene missing.
+
 ## 3.0.0
 
 - Renamed from Playblast Frames to **ReconBlaster**. The package is now

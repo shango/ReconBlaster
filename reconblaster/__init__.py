@@ -2,7 +2,7 @@
 
 # Defined before the import below, so ui and capture can read it back off the
 # package while the package is still being imported.
-__version__ = "3.0.0"
+__version__ = "3.0.1"
 
 from .ui import show
 

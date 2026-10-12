@@ -1,11 +1,11 @@
-# ReconBlaster 3.0.0
+# ReconBlaster 3.0.1
 
 Grab quick 4K viewport stills of your character from lots of shot cameras at
 once, each camera on its own frame. Needs Maya 2025 or newer.
 
 ## Install
 
-1. Unzip `reconblaster_3.0.0.zip`.
+1. Unzip `reconblaster_3.0.1.zip`.
 2. Drag `install.py` into a Maya viewport.
 
 That's it. You get a **ReconBlaster** button on your current shelf, and the tool
