@@ -1,15 +1,16 @@
-# ReconBlaster 3.0.2
+# ReconBlaster 3.1.0
 
 Grab quick 4K viewport stills of your character from lots of shot cameras at
 once, each camera on its own frame. Needs Maya 2025 or newer.
 
 ## Install
 
-1. Unzip `reconblaster_3.0.2.zip`.
+1. Unzip `reconblaster_3.1.0.zip`.
 2. Drag `install.py` into a Maya viewport.
 
 That's it. You get a **ReconBlaster** button on your current shelf, and the tool
-opens.
+opens. The first time, it asks for your user name. It remembers it after that;
+**Switch user** at the bottom of the window changes it.
 
 ## Quickstart
 
@@ -24,7 +25,10 @@ opens.
 5. Tick the passes you want: **Plate**, **Wireframe**, **Shaded**,
    **Material**, **Checker**. **View transform** turns the viewport's colour
    view transform on or off for the Material pass.
-6. Pick an output folder and hit **Process**.
+6. Fill in **Asset name** and **Take / version** for the burn-ins (optional).
+   Leave the take empty to use the version in the scene filename, like `v003`
+   from `shot010_anim_v003.ma`.
+7. Pick an output folder and hit **Process**.
 
 ## What you get
 
@@ -43,7 +47,9 @@ Every pass except Plate is lit by all the scene's lights, with shadows and
 ambient occlusion. Every light casts shadows in the captures, whatever its own
 setting. Nothing else in the scene shows up.
 
-Each image has the rig, camera and pass written along the bottom.
+Each image has three lines written along the bottom: the rig, camera and
+pass; the user, asset, take and date; and the image's filename. Anything not
+filled in shows as `N/A`.
 
 ## Good to know
 

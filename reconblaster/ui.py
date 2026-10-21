@@ -1,5 +1,6 @@
 """PySide6 window for queueing cameras and capturing their playblast frames."""
 
+import getpass
 import json
 import os
 import traceback
@@ -50,6 +51,10 @@ UNTITLED_QUEUE_FILE = "reconblaster_untitled.json"
 LEGACY_QUEUE_FILE_SUFFIX = "_playblast_cams.json"
 LEGACY_UNTITLED_QUEUE_FILE = "playblast_frames_untitled_cams.json"
 
+# Who is logged in, burnt into every image. Kept in the tool's own folder so
+# each install logs in once and remembers it in later sessions.
+USER_FILE = os.path.join(os.path.dirname(__file__), "user.txt")
+
 
 def maya_main_window():
     return wrapInstance(int(omui.MQtUtil.mainWindow()), QtWidgets.QWidget)
@@ -97,6 +102,39 @@ def queue_file_path(suffix=QUEUE_FILE_SUFFIX, untitled=UNTITLED_QUEUE_FILE):
     return os.path.join(cmds.internalVar(userPrefDir=True), untitled)
 
 
+def read_user():
+    """User name saved by the last login, or "" when nobody has logged in."""
+    try:
+        with open(USER_FILE) as handle:
+            return handle.read().strip()
+    except OSError:
+        return ""
+
+
+def write_user(name):
+    try:
+        with open(USER_FILE, "w") as handle:
+            handle.write(name + "\n")
+    except OSError as error:
+        # A read-only install still works; it just asks again next session.
+        print("ReconBlaster: could not write %s (%s)" % (USER_FILE, error))
+
+
+def log_in(parent, current=""):
+    """Ask for a user name and save it. Returns it, or "" if cancelled."""
+    name, ok = QtWidgets.QInputDialog.getText(
+        parent,
+        "ReconBlaster login",
+        "User name (burnt into every image):",
+        text=current or getpass.getuser(),
+    )
+    name = name.strip()
+    if not ok or not name:
+        return ""
+    write_user(name)
+    return name
+
+
 def _migrate_option_vars():
     """Copy Playblast Frames settings to ReconBlaster's names, once."""
     for name, legacy in LEGACY_OPTION_VARS.items():
@@ -110,7 +148,7 @@ def _migrate_option_vars():
 
 
 def read_queue_file():
-    """(character nodes, [(camera, frame)]) saved for this scene.
+    """(character nodes, [(camera, frame)], asset, take) saved for this scene.
 
     Files from 1.x are a plain list of cameras with no frames; those come back
     with a frame of None.
@@ -121,27 +159,31 @@ def read_queue_file():
         # the old file.
         path = queue_file_path(LEGACY_QUEUE_FILE_SUFFIX, LEGACY_UNTITLED_QUEUE_FILE)
     if not os.path.isfile(path):
-        return [], []
+        return [], [], "", ""
     try:
         with open(path) as handle:
             data = json.load(handle)
     except (OSError, ValueError) as error:
         print("ReconBlaster: could not read %s (%s)" % (path, error))
-        return [], []
+        return [], [], "", ""
     if isinstance(data, list):
-        return [], [(str(camera), None) for camera in data]
+        return [], [(str(camera), None) for camera in data], "", ""
     return (
         [str(node) for node in data.get("character", [])],
         [(str(shot["camera"]), int(shot["frame"])) for shot in data.get("cameras", [])],
+        str(data.get("asset", "")),
+        str(data.get("take", "")),
     )
 
 
-def write_queue_file(character, shots):
-    """Save the character and the camera queue for this scene."""
+def write_queue_file(character, shots, asset, take):
+    """Save the character, camera queue, asset and take for this scene."""
     path = queue_file_path()
     data = {
         "character": character,
         "cameras": [{"camera": camera, "frame": frame} for camera, frame in shots],
+        "asset": asset,
+        "take": take,
     }
     try:
         with open(path, "w") as handle:
@@ -163,12 +205,13 @@ def _current_frame():
 
 class ReconBlasterWindow(QtWidgets.QDialog):
 
-    def __init__(self, parent=None):
+    def __init__(self, user, parent=None):
         super().__init__(parent)
         self.setWindowTitle("ReconBlaster %s" % __version__)
         self.setWindowFlags(QtCore.Qt.Window)
         self.setMinimumSize(660, 440)
 
+        self._user = user
         self._cameras = []
         # Long paths of the nodes picked as the character's geometry.
         self._character = []
@@ -264,6 +307,15 @@ class ReconBlasterWindow(QtWidgets.QDialog):
         )
         self.prefix.setClearButtonEnabled(True)
 
+        self.asset = QtWidgets.QLineEdit()
+        self.asset.setPlaceholderText("N/A")
+        self.take = QtWidgets.QLineEdit()
+        self.take.setPlaceholderText("N/A")
+
+        self.user_label = QtWidgets.QLabel()
+        self.user_label.setStyleSheet("color: #808080;")
+        self.switch_user_button = QtWidgets.QPushButton("Switch user")
+
         self.output_dir = QtWidgets.QLineEdit()
         self.output_dir.setPlaceholderText(
             "Type an output folder path - created if missing"
@@ -312,6 +364,18 @@ class ReconBlasterWindow(QtWidgets.QDialog):
         prefix_row.addWidget(QtWidgets.QLabel("Filename prefix"))
         prefix_row.addWidget(self.prefix)
 
+        burnin_row = QtWidgets.QHBoxLayout()
+        burnin_row.addWidget(QtWidgets.QLabel("Asset name"))
+        burnin_row.addWidget(self.asset)
+        burnin_row.addWidget(QtWidgets.QLabel("Take / version"))
+        burnin_row.addWidget(self.take)
+
+        footer_row = QtWidgets.QHBoxLayout()
+        footer_row.addWidget(self.user_label)
+        footer_row.addWidget(self.switch_user_button)
+        footer_row.addStretch()
+        footer_row.addWidget(self.version_label)
+
         output_row = QtWidgets.QHBoxLayout()
         output_row.addWidget(QtWidgets.QLabel("Output folder"))
         output_row.addWidget(self.output_dir)
@@ -336,12 +400,13 @@ class ReconBlasterWindow(QtWidgets.QDialog):
         layout.addLayout(character_row)
         layout.addLayout(passes_row)
         layout.addLayout(wire_row)
+        layout.addLayout(burnin_row)
         layout.addLayout(prefix_row)
         layout.addLayout(output_row)
         layout.addWidget(self.summary)
         layout.addWidget(self.progress)
         layout.addWidget(self.process_button)
-        layout.addWidget(self.version_label)
+        layout.addLayout(footer_row)
 
     def _connect_signals(self):
         self.search.textChanged.connect(self._apply_filter)
@@ -359,6 +424,9 @@ class ReconBlasterWindow(QtWidgets.QDialog):
         for box in self.pass_boxes.values():
             box.toggled.connect(self._on_pass_toggled)
         self.prefix.textChanged.connect(self._save)
+        self.asset.textChanged.connect(self._save)
+        self.take.textChanged.connect(self._save)
+        self.switch_user_button.clicked.connect(self._switch_user)
         self.output_dir.textChanged.connect(self._save)
         self.wire_color_on.toggled.connect(self.wire_color_button.setEnabled)
         self.wire_color_on.toggled.connect(self._save)
@@ -536,7 +604,12 @@ class ReconBlasterWindow(QtWidgets.QDialog):
         """Persist the queue to its JSON file and the settings as optionVars."""
         if self._suspend_save:
             return
-        write_queue_file(self._character, self._shots())
+        write_queue_file(
+            self._character,
+            self._shots(),
+            self.asset.text().strip(),
+            self.take.text().strip(),
+        )
         cmds.optionVar(stringValue=(PREFIX_OPTION_VAR, self.prefix.text()))
         cmds.optionVar(stringValue=(OUTPUT_OPTION_VAR, self.output_dir.text()))
         cmds.optionVar(
@@ -569,7 +642,12 @@ class ReconBlasterWindow(QtWidgets.QDialog):
     def _restore_saved(self):
         self.queue_file_label.setText("Camera queue file: %s" % queue_file_path())
 
-        saved_character, saved_shots = read_queue_file()
+        self._update_user_label()
+        saved_character, saved_shots, saved_asset, saved_take = read_queue_file()
+        self.asset.setText(saved_asset)
+        self.take.setText(saved_take)
+        # Left empty, the take comes from the scene filename, so show that.
+        self.take.setPlaceholderText(capture.scene_version() or "N/A")
 
         by_name = {capture.short_name(camera): camera for camera in self._cameras}
         restored = []
@@ -620,6 +698,15 @@ class ReconBlasterWindow(QtWidgets.QDialog):
         self._update_wire_swatch()
         self.wire_color_button.setEnabled(self.wire_color_on.isChecked())
         self.view_transform_on.setEnabled(self.pass_boxes["material"].isChecked())
+
+    def _update_user_label(self):
+        self.user_label.setText("Logged in as %s" % self._user)
+
+    def _switch_user(self):
+        name = log_in(self, self._user)
+        if name:
+            self._user = name
+            self._update_user_label()
 
     def _update_wire_swatch(self):
         self.wire_color_button.setStyleSheet(
@@ -697,6 +784,9 @@ class ReconBlasterWindow(QtWidgets.QDialog):
                 passes=passes,
                 on_progress=self._on_capture_progress,
                 view_transform=self.view_transform_on.isChecked(),
+                user_name=self._user,
+                asset_name=self.asset.text().strip(),
+                take_version=self.take.text().strip() or capture.scene_version(),
             )
         except Exception:
             traceback.print_exc()
@@ -721,7 +811,11 @@ _window = None
 
 
 def show():
-    """Open the tool, replacing any window left over from a previous run."""
+    """Open the tool, replacing any window left over from a previous run.
+
+    The first time on an install it asks the user to log in, and does not open
+    if they cancel.
+    """
     global _window
     if _window is not None:
         try:
@@ -729,6 +823,9 @@ def show():
             _window.deleteLater()
         except RuntimeError:
             pass
-    _window = ReconBlasterWindow(parent=maya_main_window())
+    user = read_user() or log_in(maya_main_window())
+    if not user:
+        return None
+    _window = ReconBlasterWindow(user, parent=maya_main_window())
     _window.show()
     return _window

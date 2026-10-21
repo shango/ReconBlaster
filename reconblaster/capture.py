@@ -1,7 +1,9 @@
 """Camera discovery and single-frame playblast capture."""
 
 import contextlib
+import datetime
 import os
+import re
 
 import maya.cmds as cmds
 
@@ -168,6 +170,22 @@ def capture_resolution():
     return (CAPTURE_WIDTH, int(round(CAPTURE_WIDTH * height / float(width))))
 
 
+# A version token in a scene filename: v003 in shot010_anim_v003.ma. It must
+# not be part of a longer word, so rev2 or v2a do not count.
+SCENE_VERSION_PATTERN = re.compile(r"(?<![A-Za-z])[vV]\d+(?![A-Za-z])")
+
+
+def scene_version(scene=None):
+    """Last version token in the scene's filename, or "" when it has none.
+
+    scene defaults to the open scene's filename.
+    """
+    if scene is None:
+        scene = cmds.file(query=True, sceneName=True, shortName=True)
+    matches = SCENE_VERSION_PATTERN.findall(os.path.splitext(scene or "")[0])
+    return matches[-1] if matches else ""
+
+
 def rig_name(camera):
     """Namespace the camera lives in, or the scene name when it has none."""
     leaf = short_name(camera)
@@ -327,6 +345,10 @@ def _capture_panel(width, height):
         cmds.deleteUI(window, window=True)
 
 
+# Burnt in for any burn-in field the tool has no value for.
+MISSING = "N/A"
+
+
 # Checker tiles per 0-1 UV square.
 CHECKER_REPEAT = 8
 
@@ -382,6 +404,9 @@ def capture_batch(
     passes=None,
     on_progress=None,
     view_transform=None,
+    user_name=None,
+    asset_name=None,
+    take_version=None,
 ):
     """Write the given passes for every camera, each at its own frame.
 
@@ -403,6 +428,9 @@ def capture_batch(
     view_transform turns the viewport's view transform on (True) or off
     (False) for the Material pass, or None leaves the colour management
     prefs as they are.
+
+    user_name, asset_name and take_version are burnt into every image along
+    with the date and the image's filename. Any left empty burn in as N/A.
     """
     shapes = character_shapes(character)
     if not shapes:
@@ -415,6 +443,12 @@ def capture_batch(
     selection = cmds.ls(selection=True, long=True)
     current_time = cmds.currentTime(query=True)
     lights = scene_lights()
+    details = "User: %s  |  Asset: %s  |  Take: %s  |  Date: %s" % (
+        user_name or MISSING,
+        asset_name or MISSING,
+        take_version or MISSING,
+        datetime.date.today().isoformat(),
+    )
 
     try:
         with _viewport_globals(), _undone_after(
@@ -459,8 +493,14 @@ def capture_batch(
                         )
                         burnin.burn(
                             path,
-                            "%s  |  %s  |  %s"
-                            % (rig_name(camera), camera_label(camera), label),
+                            "\n".join(
+                                (
+                                    "%s  |  %s  |  %s"
+                                    % (rig_name(camera), camera_label(camera), label),
+                                    details,
+                                    "Image: " + os.path.basename(path),
+                                )
+                            ),
                         )
                         written.append(path)
                         if on_progress:

@@ -58,7 +58,8 @@ def onMayaDroppedPythonFile(*args):
             source,
             destination,
             dirs_exist_ok=True,
-            ignore=shutil.ignore_patterns("__pycache__"),
+            # Keep the user already logged in to this install.
+            ignore=shutil.ignore_patterns("__pycache__", "user.txt"),
         )
 
     if scripts_dir not in sys.path:

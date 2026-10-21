@@ -14,7 +14,10 @@ MIN_FONT_SIZE = 12
 
 
 def burn(path, text):
-    """Draw text into the bottom-left corner of the PNG at path, in place."""
+    """Draw text into the bottom-left corner of the PNG at path, in place.
+
+    text may hold several lines; the last one sits on the bottom edge.
+    """
     image = QtGui.QImage(path)
     if image.isNull():
         raise RuntimeError("Could not read captured image: %s" % path)
