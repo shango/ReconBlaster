@@ -389,6 +389,7 @@ def capture_batch(
     view_transform=None,
     user_name=None,
     asset_name=None,
+    take=None,
 ):
     """Write the given passes for every camera, each at its own frame.
 
@@ -411,8 +412,8 @@ def capture_batch(
     (False) for the Material pass, or None leaves the colour management
     prefs as they are.
 
-    user_name and asset_name are burnt into every image along with the date
-    and the image's filename. Either left empty burns in as N/A.
+    user_name, asset_name and take are burnt into every image along with the
+    date and the image's filename. Any left empty burn in as N/A.
     """
     shapes = character_shapes(character)
     if not shapes:
@@ -425,9 +426,10 @@ def capture_batch(
     selection = cmds.ls(selection=True, long=True)
     current_time = cmds.currentTime(query=True)
     lights = scene_lights()
-    details = "User: %s  |  Asset: %s  |  Date: %s" % (
+    details = "User: %s  |  Asset: %s  |  Take: %s  |  Date: %s" % (
         user_name or MISSING,
         asset_name or MISSING,
+        take or MISSING,
         datetime.date.today().isoformat(),
     )
 

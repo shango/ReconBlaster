@@ -6,12 +6,13 @@ shown in the window title.
 
 ## 3.1.0
 
-- Burn-ins have two more lines: **User**, **Asset** and **Date**,
+- Burn-ins have two more lines: **User**, **Asset**, **Take** and **Date**,
   then the image's filename. Any of them left empty burns in as `N/A`.
 - The first time the tool opens it asks for a user name and saves it to
   `user.txt` in the tool's folder, so later sessions skip the login. **Switch
   user** at the bottom of the window changes it. Reinstalling keeps it.
-- New **Asset name** field, saved with the scene's camera queue.
+- New **Asset name** and **Take** fields, saved with the scene's camera
+  queue.
 
 ## 3.0.2
 

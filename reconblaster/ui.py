@@ -148,7 +148,7 @@ def _migrate_option_vars():
 
 
 def read_queue_file():
-    """(character nodes, [(camera, frame)], asset) saved for this scene.
+    """(character nodes, [(camera, frame)], asset, take) saved for this scene.
 
     Files from 1.x are a plain list of cameras with no frames; those come back
     with a frame of None.
@@ -159,29 +159,31 @@ def read_queue_file():
         # the old file.
         path = queue_file_path(LEGACY_QUEUE_FILE_SUFFIX, LEGACY_UNTITLED_QUEUE_FILE)
     if not os.path.isfile(path):
-        return [], [], ""
+        return [], [], "", ""
     try:
         with open(path) as handle:
             data = json.load(handle)
     except (OSError, ValueError) as error:
         print("ReconBlaster: could not read %s (%s)" % (path, error))
-        return [], [], ""
+        return [], [], "", ""
     if isinstance(data, list):
-        return [], [(str(camera), None) for camera in data], ""
+        return [], [(str(camera), None) for camera in data], "", ""
     return (
         [str(node) for node in data.get("character", [])],
         [(str(shot["camera"]), int(shot["frame"])) for shot in data.get("cameras", [])],
         str(data.get("asset", "")),
+        str(data.get("take", "")),
     )
 
 
-def write_queue_file(character, shots, asset):
-    """Save the character, camera queue and asset for this scene."""
+def write_queue_file(character, shots, asset, take):
+    """Save the character, camera queue, asset and take for this scene."""
     path = queue_file_path()
     data = {
         "character": character,
         "cameras": [{"camera": camera, "frame": frame} for camera, frame in shots],
         "asset": asset,
+        "take": take,
     }
     try:
         with open(path, "w") as handle:
@@ -307,6 +309,8 @@ class ReconBlasterWindow(QtWidgets.QDialog):
 
         self.asset = QtWidgets.QLineEdit()
         self.asset.setPlaceholderText("N/A")
+        self.take = QtWidgets.QLineEdit()
+        self.take.setPlaceholderText("N/A")
 
         self.user_label = QtWidgets.QLabel()
         self.user_label.setStyleSheet("color: #808080;")
@@ -363,6 +367,8 @@ class ReconBlasterWindow(QtWidgets.QDialog):
         burnin_row = QtWidgets.QHBoxLayout()
         burnin_row.addWidget(QtWidgets.QLabel("Asset name"))
         burnin_row.addWidget(self.asset)
+        burnin_row.addWidget(QtWidgets.QLabel("Take"))
+        burnin_row.addWidget(self.take)
 
         footer_row = QtWidgets.QHBoxLayout()
         footer_row.addWidget(self.user_label)
@@ -419,6 +425,7 @@ class ReconBlasterWindow(QtWidgets.QDialog):
             box.toggled.connect(self._on_pass_toggled)
         self.prefix.textChanged.connect(self._save)
         self.asset.textChanged.connect(self._save)
+        self.take.textChanged.connect(self._save)
         self.switch_user_button.clicked.connect(self._switch_user)
         self.output_dir.textChanged.connect(self._save)
         self.wire_color_on.toggled.connect(self.wire_color_button.setEnabled)
@@ -601,6 +608,7 @@ class ReconBlasterWindow(QtWidgets.QDialog):
             self._character,
             self._shots(),
             self.asset.text().strip(),
+            self.take.text().strip(),
         )
         cmds.optionVar(stringValue=(PREFIX_OPTION_VAR, self.prefix.text()))
         cmds.optionVar(stringValue=(OUTPUT_OPTION_VAR, self.output_dir.text()))
@@ -635,8 +643,9 @@ class ReconBlasterWindow(QtWidgets.QDialog):
         self.queue_file_label.setText("Camera queue file: %s" % queue_file_path())
 
         self._update_user_label()
-        saved_character, saved_shots, saved_asset = read_queue_file()
+        saved_character, saved_shots, saved_asset, saved_take = read_queue_file()
         self.asset.setText(saved_asset)
+        self.take.setText(saved_take)
 
         by_name = {capture.short_name(camera): camera for camera in self._cameras}
         restored = []
@@ -775,6 +784,7 @@ class ReconBlasterWindow(QtWidgets.QDialog):
                 view_transform=self.view_transform_on.isChecked(),
                 user_name=self._user,
                 asset_name=self.asset.text().strip(),
+                take=self.take.text().strip(),
             )
         except Exception:
             traceback.print_exc()

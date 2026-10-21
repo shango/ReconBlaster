@@ -25,7 +25,7 @@ opens. The first time, it asks for your user name. It remembers it after that;
 5. Tick the passes you want: **Plate**, **Wireframe**, **Shaded**,
    **Material**, **Checker**. **View transform** turns the viewport's colour
    view transform on or off for the Material pass.
-6. Fill in **Asset name** for the burn-ins (optional).
+6. Fill in **Asset name** and **Take** for the burn-ins (optional).
 7. Pick an output folder and hit **Process**.
 
 ## What you get
@@ -46,7 +46,7 @@ ambient occlusion. Every light casts shadows in the captures, whatever its own
 setting. Nothing else in the scene shows up.
 
 Each image has three lines written along the bottom: the rig, camera and
-pass; the user, asset and date; and the image's filename. Anything not
+pass; the user, asset, take and date; and the image's filename. Anything not
 filled in shows as `N/A`.
 
 ## Good to know
