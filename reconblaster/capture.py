@@ -3,7 +3,6 @@
 import contextlib
 import datetime
 import os
-import re
 
 import maya.cmds as cmds
 
@@ -168,22 +167,6 @@ def capture_resolution():
     width = cmds.getAttr("defaultResolution.width")
     height = cmds.getAttr("defaultResolution.height")
     return (CAPTURE_WIDTH, int(round(CAPTURE_WIDTH * height / float(width))))
-
-
-# A version token in a scene filename: v003 in shot010_anim_v003.ma. It must
-# not be part of a longer word, so rev2 or v2a do not count.
-SCENE_VERSION_PATTERN = re.compile(r"(?<![A-Za-z])[vV]\d+(?![A-Za-z])")
-
-
-def scene_version(scene=None):
-    """Last version token in the scene's filename, or "" when it has none.
-
-    scene defaults to the open scene's filename.
-    """
-    if scene is None:
-        scene = cmds.file(query=True, sceneName=True, shortName=True)
-    matches = SCENE_VERSION_PATTERN.findall(os.path.splitext(scene or "")[0])
-    return matches[-1] if matches else ""
 
 
 def rig_name(camera):
@@ -406,7 +389,6 @@ def capture_batch(
     view_transform=None,
     user_name=None,
     asset_name=None,
-    take_version=None,
 ):
     """Write the given passes for every camera, each at its own frame.
 
@@ -429,8 +411,8 @@ def capture_batch(
     (False) for the Material pass, or None leaves the colour management
     prefs as they are.
 
-    user_name, asset_name and take_version are burnt into every image along
-    with the date and the image's filename. Any left empty burn in as N/A.
+    user_name and asset_name are burnt into every image along with the date
+    and the image's filename. Either left empty burns in as N/A.
     """
     shapes = character_shapes(character)
     if not shapes:
@@ -443,10 +425,9 @@ def capture_batch(
     selection = cmds.ls(selection=True, long=True)
     current_time = cmds.currentTime(query=True)
     lights = scene_lights()
-    details = "User: %s  |  Asset: %s  |  Take: %s  |  Date: %s" % (
+    details = "User: %s  |  Asset: %s  |  Date: %s" % (
         user_name or MISSING,
         asset_name or MISSING,
-        take_version or MISSING,
         datetime.date.today().isoformat(),
     )
 
